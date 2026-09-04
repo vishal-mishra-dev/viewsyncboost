@@ -1,7 +1,7 @@
 {
   "buildCommand": "cd client && npm run build",
   "outputDirectory": "client/build",
-  "installCommand": "npm install && cd client && npm install",
+  "installCommand": "npm install && cd client && npm install --legacy-peer-deps",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
