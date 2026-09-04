@@ -225,7 +225,7 @@ io.on('connection', (socket) => {
 });
 
 // Get available rooms (for discovery)
-app.get('/api/rooms', (req, res) => {
+const getAvailableRooms = (req, res) => {
   const publicRooms = Array.from(rooms.values()).map(room => ({
     id: room.id,
     name: room.name,
@@ -234,7 +234,9 @@ app.get('/api/rooms', (req, res) => {
   }));
   
   res.json(publicRooms);
-});
+};
+
+app.get(['/api/rooms', '/api/room'], getAvailableRooms);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
