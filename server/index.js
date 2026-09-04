@@ -6,15 +6,20 @@ const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const server = http.createServer(app);
+const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: clientOrigin,
     methods: ["GET", "POST"]
   }
 });
 
 app.use(cors());
 app.use(express.json());
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
 
 // Store rooms and their state
 const rooms = new Map();
