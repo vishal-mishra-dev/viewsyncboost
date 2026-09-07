@@ -29,6 +29,13 @@ interface VideoData {
   windowId?: string;
 }
 
+interface ChannelVideo {
+  id: string;
+  title: string;
+  thumbnail: string;
+  publishedAt: string;
+}
+
 const App: React.FC = () => {
   const [videos, setVideos] = useState<VideoData[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -42,6 +49,12 @@ const App: React.FC = () => {
   const [readyPlayers, setReadyPlayers] = useState<Set<string>>(new Set());
   const [isYouTubeApiReady, setIsYouTubeApiReady] = useState(false);
   const [screenCount, setScreenCount] = useState(10);
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [channelUrl, setChannelUrl] = useState('');
+  const [channelVideos, setChannelVideos] = useState<ChannelVideo[]>([]);
+  const [channelTitle, setChannelTitle] = useState('');
+  const [channelLoading, setChannelLoading] = useState(false);
+  const [channelError, setChannelError] = useState('');
   const playersRef = useRef<{ [key: string]: any }>({});
 
   // Initialize YouTube API
@@ -137,6 +150,41 @@ const App: React.FC = () => {
     generateShareUrl([...videos, newVideo]);
   };
 
+  const loadChannelVideos = async () => {
+    if (!channelUrl.trim()) return;
+
+    setChannelLoading(true);
+    setChannelError('');
+    try {
+      const response = await fetch(`/api/youtube/channel-videos?url=${encodeURIComponent(channelUrl.trim())}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Unable to load channel videos');
+      setChannelTitle(data.channel.title);
+      setChannelVideos(data.videos);
+    } catch (error) {
+      setChannelVideos([]);
+      setChannelTitle('');
+      setChannelError(error instanceof Error ? error.message : 'Unable to load channel videos');
+    } finally {
+      setChannelLoading(false);
+    }
+  };
+
+  const addChannelVideo = (channelVideo: ChannelVideo) => {
+    const newVideo: VideoData = {
+      id: `${channelVideo.id}-${Date.now()}`,
+      videoId: channelVideo.id,
+      url: `https://www.youtube.com/watch?v=${channelVideo.id}`,
+      title: channelVideo.title,
+      startTime: 0
+    };
+    setVideos(prev => {
+      const updated = [...prev, newVideo];
+      generateShareUrl(updated);
+      return updated;
+    });
+  };
+
   // Open synchronized window
   const openSyncWindow = (video: VideoData) => {
     const windowId = `sync-${video.id}-${Date.now()}`;
@@ -181,6 +229,33 @@ const App: React.FC = () => {
 
     if (openedCount < count) {
       alert(`Opened ${openedCount} of ${count} screens. Your browser blocked the remaining pop-ups.`);
+    }
+  };
+
+  const openWebsiteInScreens = () => {
+    const rawUrl = websiteUrl.trim();
+    if (!rawUrl) return;
+
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`);
+      if (!['http:', 'https:'].includes(targetUrl.protocol)) throw new Error('Unsupported protocol');
+    } catch {
+      alert('Please enter a valid website URL, for example https://example.com');
+      return;
+    }
+
+    let openedCount = 0;
+    for (let index = 0; index < screenCount; index += 1) {
+      const newWindow = window.open(
+        targetUrl.href,
+        '_blank'
+      );
+      if (newWindow) openedCount += 1;
+    }
+
+    if (openedCount < screenCount) {
+      alert(`Opened ${openedCount} of ${screenCount} screens. Allow pop-ups for this site, then click again to open all screens.`);
     }
   };
 
@@ -648,6 +723,63 @@ const App: React.FC = () => {
             onKeyPress={(e) => e.key === 'Enter' && addVideo()}
           />
           <button onClick={addVideo}>Add Video</button>
+        </div>
+
+        <div className="channel-browser">
+          <div className="video-input channel-input">
+            <input
+              type="text"
+              placeholder="Paste a YouTube channel URL..."
+              value={channelUrl}
+              onChange={(event) => setChannelUrl(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && loadChannelVideos()}
+            />
+            <button onClick={loadChannelVideos} disabled={channelLoading}>
+              {channelLoading ? 'Loading...' : 'Browse Channel'}
+            </button>
+          </div>
+          {channelError && <p className="channel-error">{channelError}</p>}
+          {channelTitle && <h2 className="channel-title">{channelTitle}</h2>}
+          {channelVideos.length > 0 && (
+            <div className="channel-video-list">
+              {channelVideos.map((channelVideo) => (
+                <button
+                  className="channel-video-item"
+                  key={channelVideo.id}
+                  onClick={() => addChannelVideo(channelVideo)}
+                  title={`Add ${channelVideo.title}`}
+                >
+                  <img src={channelVideo.thumbnail} alt="" />
+                  <span>{channelVideo.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="website-browser">
+          <div className="video-input website-input">
+            <input
+              type="text"
+              placeholder="Paste any website URL..."
+              value={websiteUrl}
+              onChange={(event) => setWebsiteUrl(event.target.value)}
+              onKeyDown={(event) => event.key === 'Enter' && openWebsiteInScreens()}
+            />
+            <select
+              value={screenCount}
+              onChange={(event) => setScreenCount(Number(event.target.value))}
+              aria-label="Number of website screens"
+            >
+              {[2, 5, 10, 15, 20, 25].map((count) => (
+                <option key={count} value={count}>{count} screens</option>
+              ))}
+            </select>
+            <button onClick={openWebsiteInScreens}>Open Website Screens</button>
+          </div>
+          <p className="website-note">
+            Opens the website in separate tabs. Allow pop-ups for this site if the browser blocks extra tabs.
+          </p>
         </div>
 
         {videos.length > 0 && (

@@ -21,6 +21,88 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/api/youtube/channel-videos', async (req, res) => {
+  const rawChannelUrl = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+  const channelUrl = /^[a-z][a-z\d+.-]*:\/\//i.test(rawChannelUrl)
+    ? rawChannelUrl
+    : `https://${rawChannelUrl}`;
+
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(channelUrl);
+  } catch {
+    return res.status(400).json({ error: 'Enter a valid YouTube channel URL' });
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase().replace(/^www\./, '');
+  if (!['youtube.com', 'm.youtube.com'].includes(hostname)) {
+    return res.status(400).json({ error: 'The URL must be a YouTube channel URL' });
+  }
+
+  const pathParts = parsedUrl.pathname.split('/').filter(Boolean);
+  const channelId = pathParts[0] === 'channel' ? pathParts[1] : null;
+  const handle = pathParts[0]?.startsWith('@') ? pathParts[0].slice(1) : null;
+  const username = pathParts[0] === 'user' ? pathParts[1] : null;
+
+  if (!channelId && !handle && !username) {
+    return res.status(400).json({ error: 'Use a URL like youtube.com/@channel or youtube.com/channel/ID' });
+  }
+
+  try {
+    let resolvedChannelId = channelId;
+    let channelPageHtml = '';
+
+    if (!resolvedChannelId) {
+      const channelPath = handle ? `/@${handle}` : `/user/${username}`;
+      const channelPageResponse = await fetch(`https://www.youtube.com${channelPath}`);
+      channelPageHtml = await channelPageResponse.text();
+      resolvedChannelId = channelPageHtml.match(/"channelId"\s*:\s*"(UC[\w-]+)"/)?.[1]
+        || channelPageHtml.match(/"externalId"\s*:\s*"(UC[\w-]+)"/)?.[1]
+        || channelPageHtml.match(/\/channel\/(UC[\w-]+)/)?.[1]
+        || null;
+    }
+
+    if (!resolvedChannelId) {
+      return res.status(404).json({ error: 'YouTube channel not found' });
+    }
+
+    const feedResponse = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${resolvedChannelId}`);
+    const feedXml = await feedResponse.text();
+    if (!feedResponse.ok || !feedXml.includes('<feed')) {
+      return res.status(502).json({ error: 'Unable to load channel videos' });
+    }
+
+    const decodeXml = (value) => value
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+    const feedTitle = decodeXml(feedXml.match(/<title>(.*?)<\/title>/)?.[1] || 'YouTube channel');
+    const videos = [...feedXml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map((match) => {
+      const entry = match[1];
+      return {
+        id: entry.match(/<yt:videoId>(.*?)<\/yt:videoId>/)?.[1] || '',
+        title: decodeXml(entry.match(/<title>(.*?)<\/title>/)?.[1] || 'Untitled video'),
+        thumbnail: entry.match(/<media:thumbnail url="(.*?)"/)?.[1] || '',
+        publishedAt: entry.match(/<published>(.*?)<\/published>/)?.[1] || ''
+      };
+    }).filter((video) => video.id);
+
+    res.json({
+      channel: {
+        id: resolvedChannelId,
+        title: feedTitle,
+        thumbnail: ''
+      },
+      videos
+    });
+  } catch (error) {
+    console.error('YouTube channel lookup failed:', error);
+    res.status(502).json({ error: 'Unable to reach YouTube' });
+  }
+});
+
 // Store rooms and their state
 const rooms = new Map();
 

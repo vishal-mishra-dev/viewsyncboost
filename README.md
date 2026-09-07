@@ -11,6 +11,7 @@ A React-based web application that allows you to watch multiple YouTube videos s
 - **Loop Functionality**: Enable/disable looping for all videos
 - **Time Synchronization**: Sync all videos to start (0:00) or to current time
 - **Shareable URLs**: Generate links to share your synchronized video setup
+- **Channel Browser**: Browse a YouTube channel and click videos to add them
 - **Responsive Design**: Works on desktop and mobile devices
 - **Quality Control**: Default 144p quality for better performance
 
@@ -60,7 +61,8 @@ start.bat
 
 ### Basic Usage
 1. **Add Videos**: Enter YouTube URLs and click "Add Video"
-2. **Synchronize**: Use the control bar at the bottom
+2. **Browse a Channel**: Paste a YouTube channel URL such as `https://www.youtube.com/@channel` and click "Browse Channel". Click any result to add it.
+3. **Synchronize**: Use the control bar at the bottom
    - **▶ Play All**: Start all videos simultaneously
    - **⏸ Pause All**: Pause all videos
    - **🔄 Loop**: Enable/disable looping
